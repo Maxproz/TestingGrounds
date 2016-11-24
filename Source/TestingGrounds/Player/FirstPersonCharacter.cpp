@@ -4,6 +4,8 @@
 #include "FirstPersonCharacter.h"
 #include "GameFramework/InputSettings.h"
 #include "../Weapons/Gun.h"
+#include "../Inventory/PickUp.h"
+#include "MyPlayerController.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogFPChar, Warning, All);
 
@@ -47,6 +49,12 @@ void AFirstPersonCharacter::BeginPlay()
 	// Call the base class  
 	Super::BeginPlay();
 
+    // Initalize reference for Item Pickup highlight
+    LastItemSeen = nullptr;
+    
+    // Initalizing our inventory
+    Inventory.SetNum(MAX_INVENTORY_ITEMS);
+    
     if (GunBlueprint == nullptr)
     {
         UE_LOG(LogTemp, Warning, TEXT("GunBlueprint missing"));
@@ -61,6 +69,13 @@ void AFirstPersonCharacter::BeginPlay()
     {
         InputComponent->BindAction("Fire", IE_Pressed, Gun, &AGun::OnFire);
     }
+}
+
+void AFirstPersonCharacter::Tick(float DeltaSeconds)
+{
+    Super::Tick(DeltaSeconds);
+    // Raycast every frame
+    Raycast();
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -86,6 +101,22 @@ void AFirstPersonCharacter::SetupPlayerInputComponent(class UInputComponent* Inp
 	InputComponent->BindAxis("TurnRate", this, &AFirstPersonCharacter::TurnAtRate);
 	InputComponent->BindAxis("LookUp", this, &APawn::AddControllerPitchInput);
 	InputComponent->BindAxis("LookUpRate", this, &AFirstPersonCharacter::LookUpAtRate);
+    
+    // Action mapping of pickup item
+    InputComponent->BindAction("PickUp", IE_Pressed, this, &AFirstPersonCharacter::PickUpItem);
+
+    FInputActionBinding InventoryBinding;
+    // We need this bind to execute on pause state
+    InventoryBinding.bExecuteWhenPaused = true;
+    InventoryBinding.ActionDelegate.BindDelegate(this, FName("HandleInventoryInput"));
+    InventoryBinding.ActionName = FName("Inventory");
+    InventoryBinding.KeyEvent = IE_Pressed;
+    
+    // Binding thie Inventory Action
+    InputComponent->AddActionBinding(InventoryBinding);
+    
+    
+    InputComponent->BindAction("DropItem", IE_Pressed, this, &AFirstPersonCharacter::DropEquippedItem);
 }
 
 void AFirstPersonCharacter::BeginTouch(const ETouchIndex::Type FingerIndex, const FVector Location)
@@ -189,4 +220,129 @@ bool AFirstPersonCharacter::EnableTouchscreenMovement(class UInputComponent* Inp
 		InputComponent->BindTouch(EInputEvent::IE_Repeat, this, &AFirstPersonCharacter::TouchUpdate);
 	}
 	return bResult;
+}
+
+void AFirstPersonCharacter::Raycast()
+{
+    // Calculating start and end location
+    FVector StartLocation = FirstPersonCameraComponent->GetComponentLocation();
+    FVector EndLocation = StartLocation + (FirstPersonCameraComponent->GetForwardVector()
+                                           * RaycastRange);
+    
+    FHitResult RaycastHit;
+    
+    // Raycast should ignore the character
+    FCollisionQueryParams CQP;
+    CQP.AddIgnoredActor(this);
+    
+    // Raycast
+    GetWorld()->LineTraceSingleByChannel(
+                                         RaycastHit,
+                                         StartLocation,
+                                         EndLocation,
+                                         ECollisionChannel::ECC_WorldDynamic,
+                                         CQP);
+    
+    APickUp* PickUp = Cast<APickUp>(RaycastHit.GetActor());
+    
+    if (LastItemSeen && LastItemSeen != PickUp)
+    {
+        // If our character seens a different pickup then disable the glowing effect
+        // - on the previous seen item
+        LastItemSeen->SetGlowEffect(false);
+    }
+    
+    if (PickUp)
+    {
+        LastItemSeen = PickUp;
+        PickUp->SetGlowEffect(true);
+    }// Re-Initalize
+    else
+    {
+        LastItemSeen = nullptr;
+    }
+}
+
+void AFirstPersonCharacter::PickUpItem()
+{
+    if (LastItemSeen)
+    {
+        // Find the first available slot
+        int32 AvailableSlot = Inventory.Find(nullptr);
+        
+        if (AvailableSlot != INDEX_NONE)
+        {
+            // Add the item to the first valid slot we found
+            Inventory[AvailableSlot] = LastItemSeen;
+            // Destroy the item from the game
+            LastItemSeen->Destroy();
+        }
+        else
+        {
+            GLog->Log("You can't carry anymore");
+        }
+    }
+}
+
+void AFirstPersonCharacter::HandleInventoryInput()
+{
+    AMyPlayerController* Con = Cast<AMyPlayerController>(GetController());
+    if (Con) Con->HandleInventoryInput();
+}
+
+void AFirstPersonCharacter::SetEquippedItem(UTexture2D* Texture)
+{
+    if (Texture)
+    {
+        //For this scenario we make the assumption that
+        //every pickup has a unique texture.
+        //So, in order to set the equipped item we just check every item
+        //inside our Inventory. Once we find an item that has the same image as the
+        //Texture image we're passing as a parameter we mark that item as
+        // - CurrentlyEquipped.
+        for (auto It = Inventory.CreateIterator(); It; It++)
+        {
+            if ((*It) && (*It)->GetPickupTexture() && (*It)->GetPickupTexture()->HasSameSourceArt(Texture))
+            {
+                CurrentlyEquippedItem = *It;
+                GLog->Log("I've set a new equipped item: " + CurrentlyEquippedItem->GetName());
+                break;
+            }
+        }
+    }
+    else
+    {
+        GLog->Log("The player has clicked an empty inventory slot");
+    }
+}
+
+void AFirstPersonCharacter::DropEquippedItem()
+{
+    if (CurrentlyEquippedItem)
+    {
+        int32 IndexOfItem;
+        if (Inventory.Find(CurrentlyEquippedItem, IndexOfItem))
+        {
+            // The location of the drop
+            FVector DropLocation = GetActorLocation() + (GetActorForwardVector() * 200);
+            
+            // Making a transform with default rotation and scale.
+            // Just setting up the location that was calculated above
+            FTransform Transform;
+            Transform.SetLocation(DropLocation);
+            
+            // Default actor spawn parameters
+            FActorSpawnParameters SpawnParams;
+            
+            // Spawning our pickup
+            APickUp* PickupToSpawn = GetWorld()->SpawnActor<APickUp>(CurrentlyEquippedItem->GetClass(), Transform, SpawnParams);
+            
+            if (PickupToSpawn)
+            {
+                // Unreference the item we've just placed
+                Inventory[IndexOfItem] = nullptr;
+            }
+            
+        }
+    }
 }

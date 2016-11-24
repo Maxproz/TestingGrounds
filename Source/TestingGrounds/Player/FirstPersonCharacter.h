@@ -3,6 +3,8 @@
 #include "GameFramework/Character.h"
 #include "FirstPersonCharacter.generated.h"
 
+#define MAX_INVENTORY_ITEMS 4
+
 class UInputComponent;
 
 UCLASS(config=Game)
@@ -20,7 +22,9 @@ class AFirstPersonCharacter : public ACharacter
 public:
 	AFirstPersonCharacter();
 
-	virtual void BeginPlay();
+	virtual void BeginPlay() override;
+    
+    virtual void Tick(float DeltaSeconds) override;
 
 	/** Base turn rate, in deg/sec. Other scaling may affect final turn rate. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category=Camera)
@@ -37,10 +41,42 @@ public:
     /** Projectile class to spawn */
     UPROPERTY(EditDefaultsOnly, Category= "Setup")
     TSubclassOf<class AGun> GunBlueprint;
+    
+    // Getter for the Inventory
+    TArray<class APickUp*> GetInventory() { return Inventory; }
+    
+    // Sets a new equipped item based on the given texture
+    void SetEquippedItem(UTexture2D* Texture);
+    
 
 private:
-    
+    // The Gun
     AGun* Gun;
+    
+    // Raycasts in front of the character to find usable items
+    void Raycast();
+    
+    // Reference to the last seen pickup item. Nullptr if none*/
+    class APickUp* LastItemSeen;
+    
+    // Handles the pickup input
+    UFUNCTION()
+    void PickUpItem();
+    
+    // The actual Inventory
+    UPROPERTY(VisibleAnywhere)
+    TArray<class APickUp*> Inventory;
+    
+    // Handles the Inventory by sending information to the controller
+    UFUNCTION()
+    void HandleInventoryInput();
+    
+    // Reference to the currently equipped item
+    class APickUp* CurrentlyEquippedItem;
+    
+    // Drops the currently equipped item
+    UFUNCTION()
+    void DropEquippedItem();
     
 protected:
 	/** Handles moving forward/backward */
@@ -74,6 +110,13 @@ protected:
 	void TouchUpdate(const ETouchIndex::Type FingerIndex, const FVector Location);
 	TouchData	TouchItem;
 	
+    // The range of the Raycast
+    UPROPERTY(EditAnywhere)
+    float RaycastRange = 250.f;
+    
+    UPROPERTY(EditAnywhere)
+    TSubclassOf<class APickUp> PickupBPRef;
+    
 protected:
 	// APawn interface
 	virtual void SetupPlayerInputComponent(UInputComponent* InputComponent) override;
