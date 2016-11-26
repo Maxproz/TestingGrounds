@@ -2,6 +2,7 @@
 
 #include "TestingGrounds.h"
 #include "Components/TextRenderComponent.h"
+#include "../Weapons/Gun.h"
 #include "CharacterV2.h"
 
 
@@ -35,6 +36,14 @@ ACharacterV2::ACharacterV2()
     CameraBoom->TargetArmLength = 300.0f; // The camera follows at this distance behind the character
     CameraBoom->bUsePawnControlRotation = true; // Rotate the arm based on the controller
     
+    Mesh1P = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("CharacterMesh1P"));
+    Mesh1P->SetOnlyOwnerSee(true);
+    Mesh1P->SetupAttachment(CameraBoom);
+    Mesh1P->bCastDynamicShadow = false;
+    Mesh1P->CastShadow = false;
+    Mesh1P->RelativeRotation = FRotator(1.9f, -19.19f, 5.2f);
+    Mesh1P->RelativeLocation = FVector(-0.5f, -4.4f, -155.7f);
+    
     // Create a follow camera
     FollowCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FollowCamera"));
     FollowCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName); // Attach the camera to the end of the boom and let the boom adjust to match the controller orientation
@@ -58,6 +67,16 @@ void ACharacterV2::BeginPlay()
 	
     InitHealth();
     InitBombCount();
+    
+    if (GunBlueprint == nullptr)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("GunBlueprint missing"));
+        return;
+    }
+    
+    Gun = GetWorld()->SpawnActor<AGun>(GunBlueprint);
+    Gun->AttachToComponent(Mesh1P, FAttachmentTransformRules(EAttachmentRule::SnapToTarget, true), TEXT("GripPoint")); //Attach gun mesh component to Skeleton, doing it here because the skelton is not yet created in the constructor
+    Gun->AnimInstance = Mesh1P->GetAnimInstance();
 }
 
 // Called every frame
@@ -86,7 +105,7 @@ void ACharacterV2::SetupPlayerInputComponent(class UInputComponent* PlayerInputC
     PlayerInputComponent->BindAxis("LookUpRate", this, &ACharacterV2::LookUpAtRate);
     
     PlayerInputComponent->BindAction("ThrowBomb", IE_Pressed, this, &ACharacterV2::AttempToSpawnBomb);
-
+    PlayerInputComponent->BindAction("Fire", IE_Pressed, Gun, &AGun::OnFire);
 }
 
 void ACharacterV2::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const

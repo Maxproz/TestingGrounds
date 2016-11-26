@@ -31,6 +31,14 @@ public:
     UPROPERTY(EditAnywhere)
     TSubclassOf<ABomb> BombActorBP;
     
+    /** Projectile class to spawn */
+    UPROPERTY(EditDefaultsOnly, Category= "Setup")
+    TSubclassOf<class AGun> GunBlueprint;
+    
+    /** Pawn mesh: 1st person view (arms; seen only by self) */
+    UPROPERTY(VisibleDefaultsOnly, Category=Mesh)
+    class USkeletalMeshComponent* Mesh1P;
+    
 protected:
     
     // The health of the character
@@ -54,6 +62,7 @@ protected:
     class UTextRenderComponent* CharText;
     
 private:
+    AGun* Gun;
     
     // Called when the Health variable gets updated
     UFUNCTION()
