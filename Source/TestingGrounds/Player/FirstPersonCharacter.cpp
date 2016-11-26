@@ -110,7 +110,7 @@ void AFirstPersonCharacter::SetupPlayerInputComponent(class UInputComponent* Inp
 	InputComponent->BindAction("Jump", IE_Pressed, this, &ACharacter::Jump);
 	InputComponent->BindAction("Jump", IE_Released, this, &ACharacter::StopJumping);
 
-
+    
 
 	InputComponent->BindAxis("MoveForward", this, &AFirstPersonCharacter::MoveForward);
 	InputComponent->BindAxis("MoveRight", this, &AFirstPersonCharacter::MoveRight);
