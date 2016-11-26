@@ -6,6 +6,7 @@
 #define MAX_INVENTORY_ITEMS 4
 
 class UInputComponent;
+class USkillsComponent;
 
 UCLASS(config=Game)
 class AFirstPersonCharacter : public ACharacter
@@ -48,7 +49,10 @@ public:
     // Sets a new equipped item based on the given texture
     void SetEquippedItem(UTexture2D* Texture);
     
-
+    /*Returns the skills component*/
+    UFUNCTION(BlueprintCallable,Category="TLSkillsTree")
+    USkillsComponent* GetSkillsComponent() const { return SkillsComponent; }
+    
 private:
     // The Gun
     AGun* Gun;
@@ -78,6 +82,37 @@ private:
     UFUNCTION()
     void DropEquippedItem();
     
+    ///////////////// SKILLS ///////////////////////////////
+private:
+    /*Returns a fixed transform based on the given spring arm comp*/
+    FTransform GetFixedSpringArmTransform(USpringArmComponent* SpringArm);
+    
+    /*Returns an array of transform in order to determine how many skills will get spawned*/
+    TArray<FTransform> GetSpawnTransforms(int32 Level);
+    
+protected:
+    /*The root component in which the spring arm components will be attached*/
+    UPROPERTY(VisibleAnywhere)
+    USceneComponent* SkillsRootComp;
+    
+    UPROPERTY(VisibleAnywhere)
+    USpringArmComponent* LevelOneSpringArm;
+    
+    UPROPERTY(VisibleAnywhere)
+    USpringArmComponent* LevelTwoSpringArm;
+    
+    UPROPERTY(VisibleAnywhere)
+    USpringArmComponent* LevelThreeSpringArm;
+
+    /*Skills Component reference*/
+    UPROPERTY(VisibleAnywhere/*, meta = (AllowPrivateAccess = "true")*/)
+    USkillsComponent* SkillsComponent;
+    
+    /*Fires a skill*/
+    UFUNCTION(BlueprintCallable, Category = "TLSkillsTree")
+    void Fire(bool bShouldFireSecondary = false);
+    
+    ///////////////// SKILLS ///////////////////////////////
 protected:
 	/** Handles moving forward/backward */
 	void MoveForward(float Val);

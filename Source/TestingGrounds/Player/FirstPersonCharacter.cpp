@@ -5,6 +5,8 @@
 #include "GameFramework/InputSettings.h"
 #include "../Weapons/Gun.h"
 #include "../Inventory/PickUp.h"
+#include "../Magic/SkillsComponent.h"
+#include "../Magic/Skill.h"
 #include "MyPlayerController.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogFPChar, Warning, All);
@@ -42,6 +44,25 @@ AFirstPersonCharacter::AFirstPersonCharacter()
 
 	// Note: The ProjectileClass and the skeletal mesh/anim blueprints for Mesh1P are set in the
 	// derived blueprint asset named MyCharacter (to avoid direct content references in C++)
+    
+    // magic casting setup
+    SkillsRootComp = CreateDefaultSubobject<USceneComponent>(FName("SkillsRootComp"));
+    
+    // Attach it to our root
+    SkillsRootComp->SetupAttachment(RootComponent);
+    
+    // Create the spring arm components and attach them to their root
+    //Create the spring arm components and attach them to their root
+    LevelOneSpringArm = CreateDefaultSubobject<USpringArmComponent>(FName("LevelOneSpringArm"));
+    LevelTwoSpringArm = CreateDefaultSubobject<USpringArmComponent>(FName("LevelTwoSpringArm"));
+    LevelThreeSpringArm = CreateDefaultSubobject<USpringArmComponent>(FName("LevelThreeSpringArm"));
+    
+    LevelOneSpringArm->SetupAttachment(SkillsRootComp);
+    LevelTwoSpringArm->SetupAttachment(SkillsRootComp);
+    LevelThreeSpringArm->SetupAttachment(SkillsRootComp);
+    
+    //Initializing the skills component
+    SkillsComponent = CreateDefaultSubobject<USkillsComponent>(FName("SkillsComponent"));
 }
 
 void AFirstPersonCharacter::BeginPlay()
@@ -346,3 +367,66 @@ void AFirstPersonCharacter::DropEquippedItem()
         }
     }
 }
+
+FTransform AFirstPersonCharacter::GetFixedSpringArmTransform(USpringArmComponent* SpringArm)
+{
+    FTransform result;
+    if (SpringArm)
+    {
+        result = SpringArm->GetComponentTransform();
+        // We want a fixed location for our transform, since we don't want to spawn our skills
+        // - right on top of our character
+        result.SetLocation(result.GetLocation() + SpringArm->GetForwardVector() * 100);
+    }
+    return result;
+}
+
+void AFirstPersonCharacter::Fire(bool bShouldFireSecondary)
+{
+    // This is a dummy logic - we currently only have 2 skills
+    TSubclassOf<ASkill> SkillBP = (bShouldFireSecondary && SkillsComponent->SkillsArray.IsValidIndex(1)) ? SkillsComponent->SkillsArray[1] : SkillsComponent->SkillsArray[0];
+    
+    if (SkillBP)
+    {
+        FActorSpawnParameters ActorSpawnParams;
+        
+        TArray<FTransform> SpawnTransforms = GetSpawnTransforms(SkillBP->GetDefaultObject<ASkill>()->GetLevel());
+        
+        for (int32 i = 0; i < SpawnTransforms.Num(); i++)
+        {
+            GetWorld()->SpawnActor<ASkill>(SkillBP, SpawnTransforms[i]);
+        }
+        
+    }
+}
+
+TArray<FTransform> AFirstPersonCharacter::GetSpawnTransforms(int32 Level)
+{
+    TArray<FTransform> SpawnPoints;
+    switch (Level)
+    {
+        case 1:
+        {
+            SpawnPoints.Add(GetFixedSpringArmTransform(LevelOneSpringArm));
+            break;
+        }
+        case 2:
+        {
+            SpawnPoints.Add(GetFixedSpringArmTransform(LevelTwoSpringArm));
+            SpawnPoints.Add(GetFixedSpringArmTransform(LevelThreeSpringArm));
+            break;
+        }
+        case 3:
+        {
+            SpawnPoints.Add(GetFixedSpringArmTransform(LevelOneSpringArm));
+            SpawnPoints.Add(GetFixedSpringArmTransform(LevelTwoSpringArm));
+            SpawnPoints.Add(GetFixedSpringArmTransform(LevelThreeSpringArm));
+        }
+        default:
+            break;
+    }
+    return SpawnPoints;
+}
+
+
+
